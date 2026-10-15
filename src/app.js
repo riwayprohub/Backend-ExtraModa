@@ -15,13 +15,6 @@ import { AppError } from './utils/AppError.js';
 import { notFound } from './middlewares/notFound.js';
 import { errorHandler } from './middlewares/errorHandler.js';
 
-/**
- * Configuración de la app Express — SIN listen().
- *
- * Esta separación es deliberada: los tests de integración (supertest) importan
- * `app` y hacen peticiones sin abrir un puerto real. `server.js` se encarga
- * de arrancar y cerrar el proceso.
- */
 const app = express();
 
 // ── Proxy / IPs reales ───────────────────────────────────────────────────────
@@ -41,21 +34,6 @@ app.use(
   })
 );
 
-/**
- * CORS evaluado por petición.
- *
- * El allowlist sigue siendo el primer filtro (nunca reflection de "*"), pero
- * ADEMÁS se permite el tráfico del propio dominio: cuando la SPA se sirve
- * desde este mismo backend (`SERVE_SPA`), el navegador manda cabecera `Origin`
- * en los `<script type="module">` y en cada fetch, y bloquearla dejaba la
- * página EN BLANCO —el bundle entero se descargaba con 403— en cuanto la web
- * se abría desde un origen que no estuviera en el allowlist (otro puerto en
- * local, o un dominio mal puesto en CORS_ORIGIN). Mismo origen = mismo sitio:
- * no es cross-site.
- *
- * Se monta por petición en lugar de una sola vez al arrancar porque la
- * comprobación necesita `req.headers.host`.
- */
 app.use((req, res, next) => {
   cors({
     origin(origin, callback) {
@@ -74,6 +52,30 @@ app.use((req, res, next) => {
     },
     // La cookie de refresh es httpOnly: sin esta cabecera el navegador
     // descarta la respuesta de /auth/login al ser cross-site.
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    maxAge: 86400
+  })(req, res, next);
+});app.use((req, res, next) => {
+  cors({
+    origin(origin, callback) {
+      // Sin origin = curl, Postman, apps móviles → permitido
+      if (!origin) return callback(null, true);
+
+      const host = req.headers.host;
+      const isSameOrigin = Boolean(host && (origin === `http://${host}` || origin === `https://${host}`));
+
+      // Agregamos explícitamente tu frontend de Render y localhost
+      const allowedFrontend = 'https://extramoda-fronted.onrender.com';
+
+      if (isSameOrigin || origin === allowedFrontend || env.corsOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      logger.warn('Origen bloqueado por CORS', { origin });
+      callback(AppError.forbidden('Origen no permitido por CORS'));
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
