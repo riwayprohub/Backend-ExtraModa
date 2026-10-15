@@ -68,8 +68,7 @@ app.use((req, res, next) => {
 
       // Agregamos explícitamente tu frontend de Render y localhost
       const allowedOrigins = [
-      'https://frontend-extramoda.onrender.com',
-      'https://extramoda-fronted.onrender.com',
+      'https://extramoda-frontend-6vkx.onrender.com',
       'http://localhost:5173'
         ];
 
