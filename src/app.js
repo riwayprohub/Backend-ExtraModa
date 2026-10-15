@@ -67,11 +67,15 @@ app.use((req, res, next) => {
       const isSameOrigin = Boolean(host && (origin === `http://${host}` || origin === `https://${host}`));
 
       // Agregamos explícitamente tu frontend de Render y localhost
-      const allowedFrontend = 'https://extramoda-fronted.onrender.com';
+      const allowedOrigins = [
+      'https://frontend-extramoda.onrender.com',
+      'https://extramoda-fronted.onrender.com',
+      'http://localhost:5173'
+        ];
 
-      if (isSameOrigin || origin === allowedFrontend || env.corsOrigins.includes(origin)) {
+      if (isSameOrigin || allowedOrigins.includes(origin) || env.corsOrigins.includes(origin)) {
         return callback(null, true);
-      }
+          }
 
       logger.warn('Origen bloqueado por CORS', { origin });
       callback(AppError.forbidden('Origen no permitido por CORS'));
