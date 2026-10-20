@@ -10,22 +10,24 @@ export const REFRESH_COOKIE = 'extramoda_rt';
  * El refresh token viaja en una cookie httpOnly: el JavaScript del navegador no
  * puede leerla, así que un XSS no puede robar la sesión larga.
  *
- *  · sameSite 'lax' → el navegador no la envía en peticiones de otro
- *    sitio (protección frente a CSRF en la mayoría de casos).
- *  · secure → solo por HTTPS, obligatorio en producción.
+ *  · sameSite 'lax' en desarrollo → el navegador no la envía en peticiones de
+ *    otro sitio (protección frente a CSRF en la mayoría de casos).
+ *  · sameSite 'none' en producción → el despliegue son DOS servicios Render y
+ *    la API y la SPA viven en subdominios distintos de onrender.com, que es un
+ *    sufijo público: para el navegador son SITIOS distintos. Con 'lax' el
+ *    navegador NO adjuntaba la cookie al fetch cross-origin de /auth/refresh y
+ *    el usuario amanecía deslogueado tras cada recarga (comprobado en el sitio
+ *    desplegado: la petición de refresh iba sin cookie y respondía 422).
+ *    'none' requiere la conexión segura, que en producción ya se exige.
+ *  · secure → solo por HTTPS. En Render siempre es HTTPS, así que 'none' es
+ *    válido; en desarrollo queda false con localhost.
  *  · path limitado a /api/v1/auth → no se adjunta a cada petición de la API.
- *
- * En producción el frontend y la API comparten dominio y protocolo (un solo
- * servicio Render), así que 'lax' basta y es más seguro que 'none': 'none'
- * solo se necesita si el frontend viviera en OTRO sitio, y obliga a exigir
- * Secure. Si algún día se separan, habría que volver a 'none' y añadir el
- * dominio en CORS_ORIGIN.
  */
 function cookieOptions() {
   return {
     httpOnly: true,
     secure: env.isProd,
-    sameSite: 'lax',
+    sameSite: env.isProd ? 'none' : 'lax',
     path: '/api/v1/auth',
     maxAge: 7 * 24 * 60 * 60 * 1000
   };

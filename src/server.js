@@ -4,26 +4,7 @@ import { logger } from './config/logger.js';
 import { prisma, connectDatabase, disconnectDatabase } from './config/database.js';
 import { seedIfEmpty } from './config/seedOnBoot.js';
 
-/**
- * Punto de entrada. Arranca y apaga: toda la configuración vive en app.js.
- *
- * Escuchamos en 0.0.0.0 (no en localhost) porque dentro del contenedor de Render
- * el proceso solo es alcanzable desde la red externa si vincula todas las
- * interfaces. Y el puerto lo inyecta la plataforma: Render asigna uno libre y
- * lo pasa en PORT, ignorando cualquier valor fijo.
- */
 const HOST = '0.0.0.0';
-
-/**
- * El servidor escucha ANTES de tocar la base de datos, y a propósito.
- *
- * El MySQL de Aiven en plan gratuito se apaga solo tras un rato sin actividad,
- * así que al arrancar puede tardar segundos en aceptar conexiones. Si esperásemos
- * a la base antes de listen(), Render vería el puerto cerrado durante ese
- * intervalo, lo contaría como arranque fallido y repetiría el despliegue.
- * Con este orden el proceso responde /healthz de inmediato y la base se conecta
- * en segundo plano.
- */
 const server = app.listen(PORT, HOST, () => {
   logger.info(`Extramoda escuchando en http://${HOST}:${PORT}`, {
     entorno: env.NODE_ENV,
@@ -88,17 +69,6 @@ process.on('uncaughtException', (error) => {
   shutdown('uncaughtException');
 });
 
-/**
- * Vigilancia del event loop.
- *
- * El truco está en comparar la HORA ESPERADA con la HORA REAL: si el bucle
- * estuviera bloqueado de verdad, el callback ni siquiera podría ejecutarse a su
- * hora, así que un `setInterval` que se cumple siempre significa "el bucle está
- * vivo" y uno que se retrasa varios minutos significa "el bucle estaba atascado".
- *
- * Un simple `setInterval(() => shutdown(), 300_000)` — sin mirar la deriva —
- * mataría el servidor cada 5 minutos aunque todo funcionase perfectamente.
- */
 const WATCHDOG_TICK_MS = 60_000;
 const WATCHDOG_DRIFT_MS = 5 * 60_000;
 

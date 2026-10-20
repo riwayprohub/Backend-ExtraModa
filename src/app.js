@@ -57,33 +57,6 @@ app.use((req, res, next) => {
     allowedHeaders: ['Content-Type', 'Authorization'],
     maxAge: 86400
   })(req, res, next);
-});app.use((req, res, next) => {
-  cors({
-    origin(origin, callback) {
-      // Sin origin = curl, Postman, apps móviles → permitido
-      if (!origin) return callback(null, true);
-
-      const host = req.headers.host;
-      const isSameOrigin = Boolean(host && (origin === `http://${host}` || origin === `https://${host}`));
-
-      // Agregamos explícitamente tu frontend de Render y localhost
-      const allowedOrigins = [
-      'https://extramoda-frontend-6vkx.onrender.com',
-      'http://localhost:5173'
-        ];
-
-      if (isSameOrigin || allowedOrigins.includes(origin) || env.corsOrigins.includes(origin)) {
-        return callback(null, true);
-          }
-
-      logger.warn('Origen bloqueado por CORS', { origin });
-      callback(AppError.forbidden('Origen no permitido por CORS'));
-    },
-    credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    maxAge: 86400
-  })(req, res, next);
 });
 
 // ── Parsing y rendimiento ────────────────────────────────────────────────────

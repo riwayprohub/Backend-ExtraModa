@@ -18,8 +18,6 @@ import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
 
-const PASSWORD = 'Password123!';
-
 const slugify = (text) =>
   text
     .toLowerCase()
@@ -177,51 +175,79 @@ async function main() {
   });
 
   // ── 4. Usuarios ────────────────────────────────────────────────────────────
-  const passwordHash = await bcrypt.hash(PASSWORD, 12); // 12 rounds = coste razonable en 2026
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@extramoda.es' },
-    update: { passwordHash },
-    create: {
-      email: 'admin@extramoda.es',
-      passwordHash,
-      firstName: 'Ana',
-      lastName: 'Administradora',
-      phone: '+59168687480',
-      role: 'ADMIN',
-      isVerified: true,
-    },
-  });
-  const customer = await prisma.user.upsert({
-    where: { email: 'cliente@ejemplo.com' },
-    update: { passwordHash },
-    create: {
-      email: 'cliente@ejemplo.com',
-      passwordHash,
-      firstName: 'Carlos',
-      lastName: 'García',
-      phone: '+59168687481',
-      role: 'CUSTOMER',
-      isVerified: true,
-      addresses: {
-        create: [
-          {
-            type: 'SHIPPING',
-            label: 'Casa',
-            firstName: 'Carlos',
-            lastName: 'García',
-            line1: 'Av. Ballivián 123',
-            city: 'Cochabamba',
-            province: 'Cochabamba',
-            postalCode: '0000',
-            countryCode: 'BO',
-            phone: '+59168687481',
-            isDefault: true,
-          },
-        ],
+  /**
+   * Credenciales del admin NUNCA fijas en el código: el repositorio puede ser
+   * público y este seed corre también al desplegar (SEED_ON_BOOT), así que una
+   * contraseña hardcodeada es el panel abierto a cualquiera.
+   *
+   *  · Desarrollo: sigue funcionando 'Password123!' tal cual.
+   *  · Producción: la contraseña llega por la variable ADMIN_PASSWORD; si no
+   *    está definida, el admin NO se crea (aviso en el log) — mejor que abrir
+   *    la puerta con una contraseña pública.
+   *
+   * `update: {}` vacío ES A PROPÓSITO: si el usuario ya existe, se respeta su
+   * contraseña actual. Antes cada re-ejecución del seed reseteaba el hash,
+   * deshaciendo cualquier cambio de contraseña que hubiera hecho el admin.
+   */
+  const isProdSeed = process.env.NODE_ENV === 'production';
+  const adminEmail = process.env.ADMIN_EMAIL ?? 'admin@extramoda.es';
+  const adminPassword = process.env.ADMIN_PASSWORD ?? (isProdSeed ? '' : 'Password123!');
+
+  if (adminPassword.length >= 8) {
+    const adminHash = await bcrypt.hash(adminPassword, 12); // 12 rounds = coste razonable en 2026
+    await prisma.user.upsert({
+      where: { email: adminEmail },
+      update: {},
+      create: {
+        email: adminEmail,
+        passwordHash: adminHash,
+        firstName: 'Ana',
+        lastName: 'Administradora',
+        phone: '+59168687480',
+        role: 'ADMIN',
+        isVerified: true,
       },
-    },
-  });
-  console.log('  ✓ 2 usuarios (admin + cliente)');
+    });
+    console.log(`  ✓ admin ${adminEmail} (solo se CREA si no existía; su contraseña no se toca)`);
+  } else {
+    console.warn(`  ⚠ Admin no creado: define ADMIN_PASSWORD (mínimo 8 caracteres) en producción para ${adminEmail}`);
+  }
+
+  // Cliente de demostración: cómodo para probar el flujo de compra en desarrollo.
+  if (!isProdSeed) {
+    const demoHash = await bcrypt.hash('Password123!', 12);
+    await prisma.user.upsert({
+      where: { email: 'cliente@ejemplo.com' },
+      update: {},
+      create: {
+        email: 'cliente@ejemplo.com',
+        passwordHash: demoHash,
+        firstName: 'Carlos',
+        lastName: 'García',
+        phone: '+59168687481',
+        role: 'CUSTOMER',
+        isVerified: true,
+        addresses: {
+          create: [
+            {
+              type: 'SHIPPING',
+              label: 'Casa',
+              firstName: 'Carlos',
+              lastName: 'García',
+              line1: 'Av. Ballivián 123',
+              city: 'Cochabamba',
+              province: 'Cochabamba',
+              postalCode: '0000',
+              countryCode: 'BO',
+              phone: '+59168687481',
+              isDefault: true,
+            },
+          ],
+        },
+      },
+    });
+    console.log('  ✓ cliente de demo cliente@ejemplo.com (solo desarrollo)');
+  }
 
   // ── 5. Cupones ─────────────────────────────────────────────────────────────
   await prisma.coupon.upsert({
@@ -333,10 +359,12 @@ async function main() {
 
   console.log('\n✅ Seed completado');
   console.log(`   Productos: ${nProducts} (el catálogo se crea desde el panel) | Categorías: ${nCategories} | Imágenes de inicio: ${nImages}`);
-  console.log('\n🔑 Usuarios de prueba (contraseña: %s)', PASSWORD);
-  console.log('   admin@extramoda.es   → ADMIN');
-  console.log('   cliente@ejemplo.com  → CUSTOMER');
-  console.log('\n💡 Cupones: BIENVENIDA10 (10 % máx. Bs 50) · ENVIOGRATIS (envío gratis > Bs 60)');
+  console.log('\n🔑 Usuarios sembrados (nada se resetea si ya existían):');
+  console.log(`   ${adminEmail} → ADMIN${adminPassword.length >= 8 ? '' : ' — NO creado: falta ADMIN_PASSWORD en producción'}`);
+  if (!isProdSeed) {
+    console.log('   cliente@ejemplo.com → CUSTOMER (contraseña: Password123!)');
+  }
+  console.log('\n💡 Cupones: BIENVENIDA10 (10 %, máximo Bs 50) · ENVIOGRATIS (envío gratis al usar el cupón)');
 }
 
 main()
